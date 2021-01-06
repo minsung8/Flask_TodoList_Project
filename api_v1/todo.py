@@ -6,11 +6,9 @@ import requests, datetime
 from . import api
 
 def send_slack(msg):
-        res = requests.post("https://hooks.slack.com/services/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", json={
-            "text":msg
-        }, headers={
-            "Content-Type":"application/json"
-        })
+        res = requests.post('https://hooks.slack.com/services/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', json={
+            'text':msg
+        }, headers={'Content-Type':'application/json'})
 
 @api.route('/todos/done', methods=['PUT'])
 def todos_done():
@@ -30,6 +28,8 @@ def todos_done():
 
     todo.status = 1
     db.session.commit()
+
+    send_slack('TODO가 완료되었습니다\n사용자: %s\n할일 제목: %s' % (user.userid, todo.title))
 
     return jsonify()
 
@@ -56,7 +56,7 @@ def todos():
         db.session.add(todo)
         db.session.commit()
 
-        send_slack('TODO가 생성되었습니다')
+        send_slack('TODO가 생성되었습니다\n사용자: %s\n할일 제목: %s\n기한:%s' % (user.userid, todo.title, todo.due))
 
         return jsonify(), 201
 
@@ -108,9 +108,28 @@ def slack_todos():
         todo_user_id = args[0]
         user = User.query.filter_by(userid=todo_user_id).first()
 
-        todos = Todo.query.filter_by(user_id=user.id, status=0)
+        todos = Todo.query.filter_by(user_id=user.id)
+
+        for todo in todos:
+            ret_msg += '%d. %s (~ %s, %s)\n'%(todo.id, todo.title, todo.due, ('미완료', '완료')[int(todo.status)])
+
+    elif cmd == 'done':
+        todo_id = args[0]
+        todo = Todo.query.filter_by(id=todo_id).first()
+
+        todo.status = 1
+        db.session.commit()
+
+        ret_msg = 'Todo가 완료처리 되었습니다'
+
+    elif cmd == 'undo':
         
-        for idx, todo in enumerate(todos):
-            ret_msg += '%d. %s (~ %s)\n' %(idx + 1, todo.title, todo.due)
+        todo_id = args[0]
+        todo = Todo.query.filter_by(id=todo_id).first()
+
+        todo.status = 0
+        db.session.commit()
+
+        ret_msg = 'Todo가 미완료처리 되었습니다'
 
     return ret_msg
